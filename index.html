@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BrainOS</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">BrainOS</div>
+      <label class="search-wrap" for="searchInput">
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input id="searchInput" type="search" placeholder="搜索标题、内容、标签……" autocomplete="off">
+      </label>
+    </header>
+
+    <nav class="category-nav" aria-label="知识分类">
+      <div id="categoryList" class="category-list"></div>
+      <button id="manageCategoriesButton" class="category-manage-button" type="button" aria-label="管理分类">＋</button>
+    </nav>
+
+    <main class="workspace">
+      <section class="drop-section" aria-label="存入知识">
+        <form id="noteForm" class="drop-form">
+          <div id="dropZone" class="drop-zone">
+            <textarea id="dropInput" name="content" rows="8" placeholder="粘贴文字、拖入图片、放入链接"></textarea>
+            <div id="imagePreview" class="image-preview" hidden>
+              <img id="imagePreviewMedia" alt="图片预览">
+              <div>
+                <span id="imageName" class="image-name"></span>
+                <button id="clearImageButton" class="clear-image-button" type="button">移除</button>
+              </div>
+            </div>
+            <div class="drop-zone-footer">
+              <span id="dropStatus" class="drop-status"></span>
+              <label class="image-picker" for="imageInput">选择图片</label>
+              <input id="imageInput" type="file" accept="image/*">
+            </div>
+          </div>
+          <button class="primary-button" type="submit">整理并存入</button>
+        </form>
+      </section>
+
+      <section class="library-panel" aria-labelledby="libraryTitle">
+        <div class="library-topline">
+          <div class="section-heading">
+            <p id="activeCategoryLabel">收件箱</p>
+            <h2 id="libraryTitle">知识库</h2>
+          </div>
+          <span id="noteCount" class="count-badge">0 条</span>
+        </div>
+        <div id="notesList" class="notes-list" aria-live="polite"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="detailModal" class="modal-overlay" aria-hidden="true">
+    <section class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <div>
+          <p class="modal-kicker">知识详情</p>
+          <h2 id="modalTitle"></h2>
+        </div>
+        <button id="closeModalButton" class="icon-button" type="button" aria-label="关闭">×</button>
+      </div>
+
+      <div id="detailView" class="modal-body"></div>
+
+      <form id="editForm" class="modal-body edit-form" hidden>
+        <label for="editTitleInput">名称</label>
+        <input id="editTitleInput" type="text" autocomplete="off">
+
+        <label for="editContentInput">内容</label>
+        <textarea id="editContentInput" rows="10"></textarea>
+
+        <label for="editTagsInput">补充标签</label>
+        <input id="editTagsInput" type="text" autocomplete="off">
+      </form>
+
+      <div class="modal-actions">
+        <button id="deleteNoteButton" class="danger-button" type="button">删除</button>
+        <div class="action-group">
+          <button id="cancelEditButton" class="secondary-button" type="button" hidden>取消</button>
+          <button id="editNoteButton" class="secondary-button" type="button">编辑</button>
+          <button id="saveEditButton" class="primary-button compact" type="button" hidden>保存修改</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="categoryModal" class="modal-overlay" aria-hidden="true">
+    <section class="modal-sheet category-sheet" role="dialog" aria-modal="true" aria-labelledby="categoryModalTitle">
+      <div class="modal-header">
+        <div>
+          <p class="modal-kicker">分类</p>
+          <h2 id="categoryModalTitle">管理分类</h2>
+        </div>
+        <button id="closeCategoryModalButton" class="icon-button" type="button" aria-label="关闭">×</button>
+      </div>
+
+      <div class="modal-body category-manager-body">
+        <div id="categoryManagerList" class="category-manager-list"></div>
+
+        <form id="addCategoryForm" class="category-add-form">
+          <input id="newCategoryInput" type="text" placeholder="新增分类名称" autocomplete="off">
+          <button class="secondary-button" type="submit">添加分类</button>
+        </form>
+        <p id="categoryMessage" class="category-message" aria-live="polite"></p>
+      </div>
+    </section>
+  </div>
+
+  <script src="js/classifier.js"></script>
+  <script src="js/categories.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
