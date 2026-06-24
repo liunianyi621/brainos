@@ -57,7 +57,7 @@
 
   function summarize(title, content) {
     const cleanContent = String(content || "").trim();
-    const fallbackTitle = String(title || "未命名知识").trim();
+    const fallbackTitle = String(title || "未命名记忆").trim();
     const source = cleanContent || fallbackTitle;
     const summary = source.slice(0, 120);
     return source.length > 120 ? `${summary}…` : summary;

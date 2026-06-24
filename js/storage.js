@@ -7,7 +7,7 @@
       const parsed = value ? JSON.parse(value) : [];
       return Array.isArray(parsed) ? parsed : [];
     } catch (error) {
-      console.warn("BrainOS 无法读取本地知识库，已使用空列表。", error);
+      console.warn("BrainOS 无法读取本地记忆库，已使用空列表。", error);
       return [];
     }
   }
@@ -22,7 +22,7 @@
     try {
       localStorage.setItem(STORAGE_KEY, payload);
     } catch (error) {
-      console.error("BrainOS 保存本地知识库失败。", error);
+      console.error("BrainOS 保存本地记忆库失败。", error);
       throw new Error("LOCAL_STORAGE_QUOTA_EXCEEDED");
     }
   }
@@ -248,7 +248,7 @@
       return getDomain(url || content) || "链接记录";
     }
 
-    return contentTitle || originalImageName || "未命名知识";
+    return contentTitle || originalImageName || "未命名记忆";
   }
 
   function generateSummary(type, title, content, url, originalImageName) {

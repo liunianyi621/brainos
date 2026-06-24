@@ -38,8 +38,10 @@
     refs.saveStatus = document.querySelector("#saveStatus");
     refs.searchInput = document.querySelector("#searchInput");
     refs.categoryList = document.querySelector("#categoryList");
+    refs.memoryCategoryList = document.querySelector("#memoryCategoryList");
     refs.manageCategoriesButton = document.querySelector("#manageCategoriesButton");
     refs.activeCategoryLabel = document.querySelector("#activeCategoryLabel");
+    refs.memoryTitle = document.querySelector("#memoryTitle");
     refs.noteCount = document.querySelector("#noteCount");
     refs.notesList = document.querySelector("#notesList");
     refs.detailModal = document.querySelector("#detailModal");
@@ -87,10 +89,16 @@
         return;
       }
 
-      state.activeCategory = button.dataset.category;
-      renderCategories();
-      renderNotes();
-      updateDropPlaceholder();
+      selectCategory(button.dataset.category);
+    });
+
+    refs.memoryCategoryList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-category]");
+      if (!button) {
+        return;
+      }
+
+      selectCategory(button.dataset.category);
     });
 
     refs.manageCategoriesButton.addEventListener("click", openCategoryManager);
@@ -147,13 +155,29 @@
     }
 
     refs.categoryList.innerHTML = categories.map((category) => {
-      const activeClass = category.name === state.activeCategory ? " is-active" : "";
-      return `
-        <button class="category-button${activeClass}" type="button" data-category="${escapeHtml(category.name)}">
-          ${escapeHtml(category.name)}
-        </button>
-      `;
+      return renderCategoryButton(category, "category-button");
     }).join("");
+
+    refs.memoryCategoryList.innerHTML = categories.map((category) => {
+      return renderCategoryButton(category, "memory-category-button");
+    }).join("");
+  }
+
+  function renderCategoryButton(category, className) {
+    const activeClass = category.name === state.activeCategory ? " is-active" : "";
+
+    return `
+      <button class="${className}${activeClass}" type="button" data-category="${escapeHtml(category.name)}">
+        ${escapeHtml(category.name)}
+      </button>
+    `;
+  }
+
+  function selectCategory(category) {
+    state.activeCategory = category;
+    renderCategories();
+    renderNotes();
+    updateDropPlaceholder();
   }
 
   function updateDropPlaceholder() {
@@ -279,7 +303,7 @@
   }
 
   function deleteCategory(category) {
-    const confirmed = window.confirm("删除分类后，该分类下的内容会移动到可用分类。确定删除吗？");
+    const confirmed = window.confirm("删除分类后，该分类下的记忆会移动到可用分类。确定删除吗？");
     if (!confirmed) {
       return;
     }
@@ -420,7 +444,7 @@
       refs.imagePreviewMedia.src = processedImage.imageData;
       refs.imageName.textContent = processedImage.originalImageName || "图片";
       refs.imageMeta.textContent = getImageMetaText(processedImage.imageSize);
-      refs.dropStatus.textContent = "图片已压缩，可存入知识库";
+      refs.dropStatus.textContent = "图片已压缩，可存入记忆库";
       refs.imagePreview.hidden = false;
       refs.dropZone.classList.add("has-image");
       return true;
@@ -508,39 +532,38 @@
 
   function getVisibleNotes() {
     const notes = window.BrainOSStorage.getAll();
-    const byCategory = notes.filter((note) => {
-      if (state.activeCategory === window.BrainOSCategories.lastCategory) {
-        return true;
-      }
 
-      return note.category === state.activeCategory;
-    });
-
-    if (!state.searchQuery) {
-      return byCategory;
+    if (state.searchQuery) {
+      const query = state.searchQuery.toLocaleLowerCase();
+      return notes.filter((note) => matchesSearch(note, query));
     }
 
-    const query = state.searchQuery.toLocaleLowerCase();
-    return byCategory.filter((note) => {
-      const text = [
-        note.title,
-        note.content,
-        note.summary,
-        note.category,
-        note.type,
-        note.url,
-        note.originalImageName,
-        ...(note.tags || [])
-      ].join(" ").toLocaleLowerCase();
+    if (state.activeCategory === window.BrainOSCategories.lastCategory) {
+      return notes;
+    }
 
-      return text.includes(query);
-    });
+    return notes.filter((note) => note.category === state.activeCategory);
+  }
+
+  function matchesSearch(note, query) {
+    const text = [
+      note.title,
+      note.content,
+      note.summary,
+      note.category,
+      note.url,
+      note.originalImageName,
+      ...(note.tags || [])
+    ].join(" ").toLocaleLowerCase();
+
+    return text.includes(query);
   }
 
   function renderNotes() {
     const notes = getVisibleNotes();
 
-    refs.activeCategoryLabel.textContent = state.activeCategory;
+    refs.activeCategoryLabel.textContent = state.searchQuery ? "全部记忆" : state.activeCategory;
+    refs.memoryTitle.textContent = state.searchQuery ? "搜索结果" : "记忆库";
     refs.noteCount.textContent = `${notes.length} 条`;
 
     if (notes.length === 0) {
@@ -561,7 +584,7 @@
       <button class="note-card" type="button" data-note-id="${escapeHtml(note.id)}">
         <div class="note-card-main">
           <h3>${escapeHtml(note.title)}</h3>
-          <p class="note-summary">${escapeHtml(note.summary)}</p>
+          <p class="note-summary">${escapeHtml(getNotePreview(note))}</p>
         </div>
         <div class="note-meta">
           <span class="category-chip">${escapeHtml(note.category)}</span>
@@ -596,17 +619,6 @@
       <div class="detail-content">
         ${renderOriginalBlock(note)}
         <div class="detail-block">
-          <span class="detail-label">摘要</span>
-          <p class="detail-text summary-box">${escapeHtml(note.summary)}</p>
-        </div>
-        <div class="detail-block">
-          <span class="detail-label">分类与标签</span>
-          <div class="detail-meta">
-            <span class="category-chip">${escapeHtml(note.category)}</span>
-            ${renderTags(note.tags)}
-          </div>
-        </div>
-        <div class="detail-block">
           <span class="detail-label">时间</span>
           <p class="detail-text">创建：${escapeHtml(formatDateTime(note.createdAt))}<br>更新：${escapeHtml(formatDateTime(note.updatedAt))}</p>
         </div>
@@ -622,11 +634,16 @@
   function renderOriginalBlock(note) {
     if (note.type === "image") {
       return `
+        ${note.content ? `
+          <div class="detail-block">
+            <span class="detail-label">内容</span>
+            <p class="detail-text">${escapeHtml(note.content)}</p>
+          </div>
+        ` : ""}
         <div class="detail-block">
           <span class="detail-label">图片</span>
           ${note.imageData ? `<img class="detail-image" src="${escapeHtml(note.imageData)}" alt="${escapeHtml(note.originalImageName || "图片")}">` : ""}
           <p class="detail-text">${escapeHtml(note.originalImageName || "图片")}</p>
-          ${note.content ? `<p class="detail-text">${escapeHtml(note.content)}</p>` : ""}
         </div>
       `;
     }
@@ -723,6 +740,18 @@
       .join("");
   }
 
+  function getNotePreview(note) {
+    if (note.type === "link") {
+      return note.url || note.summary || "链接";
+    }
+
+    if (note.type === "image") {
+      return note.content || note.summary || note.originalImageName || "图片";
+    }
+
+    return note.summary || note.content || "没有内容";
+  }
+
   function formatDateTime(value) {
     if (!value) {
       return "未知时间";
@@ -738,20 +767,18 @@
 
   function getEmptyTitle() {
     if (state.searchQuery) {
-      return "没有找到匹配内容";
+      return "没有找到相关记忆";
     }
 
-    return state.activeCategory === window.BrainOSCategories.lastCategory
-      ? "知识库还是空的"
-      : `还没有${state.activeCategory}内容`;
+    return "还没有记忆";
   }
 
   function getEmptyDescription() {
     if (state.searchQuery) {
-      return "换一个关键词，或者先存入新的知识。";
+      return "换个关键词试试。";
     }
 
-    return "把文字、链接或图片放进上方空白区。";
+    return "把文字、图片或链接放进去，它会出现在这里。";
   }
 
   function escapeHtml(value) {
