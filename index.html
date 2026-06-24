@@ -33,6 +33,7 @@
               <img id="imagePreviewMedia" alt="图片预览">
               <div>
                 <span id="imageName" class="image-name"></span>
+                <span id="imageMeta" class="image-meta"></span>
                 <button id="clearImageButton" class="clear-image-button" type="button">移除</button>
               </div>
             </div>
@@ -43,13 +44,14 @@
             </div>
           </div>
           <button class="primary-button" type="submit">整理并存入</button>
+          <p id="saveStatus" class="save-status" role="status" aria-live="polite"></p>
         </form>
       </section>
 
       <section class="library-panel" aria-labelledby="libraryTitle">
         <div class="library-topline">
           <div class="section-heading">
-            <p id="activeCategoryLabel">收件箱</p>
+            <p id="activeCategoryLabel">摄影</p>
             <h2 id="libraryTitle">知识库</h2>
           </div>
           <span id="noteCount" class="count-badge">0 条</span>
@@ -116,6 +118,8 @@
   </div>
 
   <script src="js/classifier.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/imageProcessor.js"></script>
   <script src="js/categories.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/ui.js"></script>

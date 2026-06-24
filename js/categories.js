@@ -1,11 +1,10 @@
 (function () {
   const STORAGE_KEY = "brainos.categories.v1";
-  const FALLBACK_CATEGORY = "灵感";
-  const SYSTEM_FIRST = "收件箱";
   const SYSTEM_LAST = "全部";
+  const FALLBACK_CATEGORY = "灵感";
+  let initialized = false;
 
   const DEFAULT_CATEGORIES = [
-    { id: "cat-inbox", name: SYSTEM_FIRST, isSystem: true, order: 0 },
     { id: "cat-photography", name: "摄影", isSystem: false, order: 10 },
     { id: "cat-film", name: "电影", isSystem: false, order: 20 },
     { id: "cat-investing", name: "投资", isSystem: false, order: 30 },
@@ -16,11 +15,18 @@
   ];
 
   function initialize() {
+    if (initialized) {
+      return;
+    }
+
     if (!localStorage.getItem(STORAGE_KEY)) {
       writeCategories(DEFAULT_CATEGORIES.map((category) => withCreatedAt(category)));
-    } else {
-      writeCategories(normalizeCategories(readCategories()));
+      initialized = true;
+      return;
     }
+
+    writeCategories(normalizeCategories(readCategories()));
+    initialized = true;
   }
 
   function readCategories() {
@@ -51,7 +57,8 @@
 
     categories.forEach((category, index) => {
       const name = normalizeName(category.name);
-      if (!name || seenNames.has(name.toLocaleLowerCase())) {
+
+      if (!name || name === "收件箱" || seenNames.has(name.toLocaleLowerCase())) {
         return;
       }
 
@@ -59,31 +66,35 @@
       normalized.push({
         id: category.id || createId(),
         name,
-        isSystem: name === SYSTEM_FIRST || name === SYSTEM_LAST,
-        order: Number.isFinite(Number(category.order)) ? Number(category.order) : (index + 1) * 10,
+        isSystem: name === SYSTEM_LAST,
+        order: name === SYSTEM_LAST ? 9999 : getOrder(category, index),
         createdAt: category.createdAt || new Date().toISOString()
       });
     });
-
-    if (!normalized.some((category) => category.name === SYSTEM_FIRST)) {
-      normalized.push(withCreatedAt({ id: "cat-inbox", name: SYSTEM_FIRST, isSystem: true, order: 0 }));
-    }
 
     if (!normalized.some((category) => category.name === SYSTEM_LAST)) {
       normalized.push(withCreatedAt({ id: "cat-all", name: SYSTEM_LAST, isSystem: true, order: 9999 }));
     }
 
+    if (!normalized.some((category) => category.name !== SYSTEM_LAST)) {
+      normalized.push(withCreatedAt({ id: "cat-ideas", name: FALLBACK_CATEGORY, isSystem: false, order: 10 }));
+    }
+
     return sortCategories(normalized);
   }
 
+  function getOrder(category, index) {
+    return Number.isFinite(Number(category.order)) ? Number(category.order) : (index + 1) * 10;
+  }
+
   function sortCategories(categories) {
-    const inbox = categories.find((category) => category.name === SYSTEM_FIRST);
     const all = categories.find((category) => category.name === SYSTEM_LAST);
     const editable = categories
-      .filter((category) => category.name !== SYSTEM_FIRST && category.name !== SYSTEM_LAST)
+      .filter((category) => category.name !== SYSTEM_LAST)
+      .map((category) => ({ ...category, isSystem: false }))
       .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "zh-CN"));
 
-    return [inbox, ...editable, all].filter(Boolean);
+    return [...editable, all || withCreatedAt({ id: "cat-all", name: SYSTEM_LAST, isSystem: true, order: 9999 })];
   }
 
   function getAll() {
@@ -101,7 +112,28 @@
   }
 
   function resolveCategory(name) {
-    return exists(name) ? normalizeName(name) : FALLBACK_CATEGORY;
+    return exists(name) ? normalizeName(name) : getFallbackCategory();
+  }
+
+  function getWritableCategory(name) {
+    const cleanName = normalizeName(name);
+    const category = getAll().find((item) => sameName(item.name, cleanName));
+
+    if (category && !category.isSystem) {
+      return category.name;
+    }
+
+    return getFallbackCategory();
+  }
+
+  function getFallbackCategory(excludedName) {
+    const editable = getEditable().filter((category) => !sameName(category.name, excludedName));
+    const ideas = editable.find((category) => sameName(category.name, FALLBACK_CATEGORY));
+    return (ideas || editable[0] || { name: FALLBACK_CATEGORY }).name;
+  }
+
+  function getFirstWritableCategory() {
+    return (getEditable()[0] || { name: FALLBACK_CATEGORY }).name;
   }
 
   function addCategory(name) {
@@ -173,12 +205,19 @@
       return fail("系统分类不能删除。");
     }
 
-    writeCategories(sortCategories(categories.filter((category) => category.id !== id)));
-    if (window.BrainOSStorage && typeof window.BrainOSStorage.moveCategoryNotes === "function") {
-      window.BrainOSStorage.moveCategoryNotes(target.name, FALLBACK_CATEGORY);
+    if (getEditable().length <= 1) {
+      return fail("至少保留一个分类。");
     }
 
-    return ok({ deletedName: target.name });
+    const nextCategories = categories.filter((category) => category.id !== id);
+    const fallbackCategory = getFallbackCategory(target.name);
+    writeCategories(sortCategories(nextCategories));
+
+    if (window.BrainOSStorage && typeof window.BrainOSStorage.moveCategoryNotes === "function") {
+      window.BrainOSStorage.moveCategoryNotes(target.name, fallbackCategory);
+    }
+
+    return ok({ deletedName: target.name, fallbackCategory });
   }
 
   function moveCategory(id, direction) {
@@ -239,12 +278,14 @@
     getEditable,
     exists,
     resolveCategory,
+    getWritableCategory,
+    getFallbackCategory,
+    getFirstWritableCategory,
     addCategory,
     renameCategory,
     deleteCategory,
     moveCategory,
     fallbackCategory: FALLBACK_CATEGORY,
-    firstCategory: SYSTEM_FIRST,
     lastCategory: SYSTEM_LAST
   };
 })();

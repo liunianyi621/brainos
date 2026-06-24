@@ -1,7 +1,7 @@
 (function () {
   const STORAGE_KEY = "brainos.notes.v1";
 
-  function readNotes() {
+  function readRawNotes() {
     try {
       const value = localStorage.getItem(STORAGE_KEY);
       const parsed = value ? JSON.parse(value) : [];
@@ -12,8 +12,19 @@
     }
   }
 
+  function readNotes() {
+    return readRawNotes().map(normalizeNote);
+  }
+
   function writeNotes(notes) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+    const payload = JSON.stringify(notes.map(normalizeNote));
+
+    try {
+      localStorage.setItem(STORAGE_KEY, payload);
+    } catch (error) {
+      console.error("BrainOS 保存本地知识库失败。", error);
+      throw new Error("LOCAL_STORAGE_QUOTA_EXCEEDED");
+    }
   }
 
   function createId() {
@@ -35,12 +46,12 @@
   function createNote(input) {
     const now = new Date().toISOString();
     const fields = buildNoteFields(input, { useInputTitle: false });
-    const note = {
+    const note = normalizeNote({
       id: createId(),
       ...fields,
       createdAt: now,
       updatedAt: now
-    };
+    });
 
     const notes = readNotes();
     notes.unshift(note);
@@ -58,12 +69,11 @@
 
     const existing = notes[index];
     const fields = buildNoteFields({ ...existing, ...input }, { useInputTitle: true });
-
-    const updatedNote = {
+    const updatedNote = normalizeNote({
       ...existing,
       ...fields,
       updatedAt: new Date().toISOString()
-    };
+    });
 
     notes[index] = updatedNote;
     writeNotes(notes);
@@ -77,36 +87,36 @@
   }
 
   function renameCategory(oldName, newName) {
-    const notes = readNotes();
+    const notes = readRawNotes();
     const nextNotes = notes.map((note) => {
       if (note.category !== oldName) {
-        return note;
+        return normalizeNote(note);
       }
 
-      return {
+      return normalizeNote({
         ...note,
         category: newName,
         tags: replaceTag(note.tags, oldName, newName),
         updatedAt: new Date().toISOString()
-      };
+      });
     });
 
     writeNotes(nextNotes);
   }
 
   function moveCategoryNotes(fromCategory, toCategory) {
-    const notes = readNotes();
+    const notes = readRawNotes();
     const nextNotes = notes.map((note) => {
       if (note.category !== fromCategory) {
-        return note;
+        return normalizeNote(note);
       }
 
-      return {
+      return normalizeNote({
         ...note,
         category: toCategory,
         tags: replaceTag(note.tags, fromCategory, toCategory),
         updatedAt: new Date().toISOString()
-      };
+      });
     });
 
     writeNotes(nextNotes);
@@ -114,36 +124,93 @@
 
   function buildNoteFields(input, options) {
     const content = String(input.content || "").trim();
-    const type = input.type || detectType(content, input);
-    const sourceUrl = type === "link" ? content : String(input.sourceUrl || "").trim();
-    const imageName = type === "image" ? String(input.imageName || "").trim() : "";
-    const imagePreview = type === "image" ? String(input.imagePreview || "").trim() : "";
-    const generatedTitle = generateTitle(type, content, sourceUrl, imageName);
+    const type = normalizeType(input.type || detectType(content, input));
+    const url = type === "link" ? normalizeUrl(input.url || input.sourceUrl || content) : "";
+    const imageData = type === "image" ? String(input.imageData || input.imagePreview || "").trim() : "";
+    const originalImageName = type === "image" ? String(input.originalImageName || input.imageName || "").trim() : "";
+    const imageSize = type === "image" ? normalizeImageSize(input.imageSize) : null;
+    const category = resolveInputCategory(input.category);
+    const generatedTitle = generateTitle(type, content, url, originalImageName);
     const title = options.useInputTitle
       ? String(input.title || generatedTitle).trim() || generatedTitle
       : generatedTitle;
+    const summary = generateSummary(type, title, content, url, originalImageName);
     const baseTags = window.BrainOSClassifier.parseTags(input.tags);
-    const category = window.BrainOSClassifier.classify(title, content || imageName || sourceUrl, baseTags);
+    const aiTags = window.BrainOSAI ? window.BrainOSAI.generateTags({ type, title, content, url, category }) : [];
 
     return {
       type,
       title,
-      content: type === "image" && !content ? imageName : content,
-      summary: generateSummary(type, title, content, sourceUrl),
+      content: type === "image" && !content ? "" : content,
+      url,
+      imageData,
+      imageSize,
+      originalImageName,
+      summary,
       category,
-      tags: window.BrainOSClassifier.buildTags(baseTags, category),
-      sourceUrl,
-      imageName,
-      imagePreview
+      tags: window.BrainOSClassifier.buildTags([...baseTags, ...aiTags], category)
+    };
+  }
+
+  function normalizeNote(note) {
+    const type = normalizeType(note.type || detectType(note.content, note));
+    const category = normalizeLegacyCategory(note.category);
+    const url = type === "link" ? normalizeUrl(note.url || note.sourceUrl || note.content) : "";
+    const imageData = type === "image" ? String(note.imageData || note.imagePreview || "").trim() : "";
+    const originalImageName = type === "image" ? String(note.originalImageName || note.imageName || "").trim() : "";
+    const content = type === "link" ? String(note.content || "").trim() : String(note.content || "").trim();
+    const title = String(note.title || generateTitle(type, content, url, originalImageName)).trim();
+    const summary = String(note.summary || generateSummary(type, title, content, url, originalImageName)).trim();
+
+    return {
+      ...note,
+      type,
+      title,
+      content,
+      url,
+      imageData,
+      imageSize: type === "image" ? normalizeImageSize(note.imageSize) : null,
+      originalImageName,
+      summary,
+      category,
+      tags: window.BrainOSClassifier.buildTags(note.tags, category),
+      createdAt: note.createdAt || new Date().toISOString(),
+      updatedAt: note.updatedAt || note.createdAt || new Date().toISOString()
     };
   }
 
   function detectType(content, input) {
-    if (input.imagePreview || input.imageName) {
+    if (input && (input.imageData || input.imagePreview || input.originalImageName || input.imageName)) {
       return "image";
     }
 
     return isUrl(content) ? "link" : "text";
+  }
+
+  function normalizeType(type) {
+    return ["image", "link", "text"].includes(type) ? type : "text";
+  }
+
+  function resolveInputCategory(category) {
+    if (window.BrainOSCategories && typeof window.BrainOSCategories.getWritableCategory === "function") {
+      return window.BrainOSCategories.getWritableCategory(category);
+    }
+
+    return normalizeLegacyCategory(category);
+  }
+
+  function normalizeLegacyCategory(category) {
+    const cleanCategory = String(category || "").trim();
+
+    if (!cleanCategory || cleanCategory === "收件箱" || cleanCategory === "全部") {
+      return window.BrainOSCategories ? window.BrainOSCategories.getFallbackCategory() : "灵感";
+    }
+
+    if (window.BrainOSCategories && typeof window.BrainOSCategories.resolveCategory === "function") {
+      return window.BrainOSCategories.resolveCategory(cleanCategory);
+    }
+
+    return cleanCategory;
   }
 
   function isUrl(value) {
@@ -161,25 +228,39 @@
     }
   }
 
-  function generateTitle(type, content, sourceUrl, imageName) {
+  function normalizeUrl(value) {
+    const text = String(value || "").trim();
+    if (!text) {
+      return "";
+    }
+
+    return /^https?:\/\//i.test(text) ? text : `https://${text}`;
+  }
+
+  function generateTitle(type, content, url, originalImageName) {
+    const contentTitle = String(content || "").replace(/\s+/g, " ").trim().slice(0, 20);
+
     if (type === "image") {
-      return "图片记录";
+      return contentTitle || originalImageName || "图片";
     }
 
     if (type === "link") {
-      return getDomain(sourceUrl || content) || "链接记录";
+      return getDomain(url || content) || "链接记录";
     }
 
-    const title = String(content || "").replace(/\s+/g, " ").trim().slice(0, 20);
-    return title || imageName || "未命名知识";
+    return contentTitle || originalImageName || "未命名知识";
   }
 
-  function generateSummary(type, title, content, sourceUrl) {
+  function generateSummary(type, title, content, url, originalImageName) {
     if (type === "image") {
-      return "待 AI 识别图片内容";
+      return String(content || "").trim() || "图片";
     }
 
-    const source = String(content || sourceUrl || title || "").trim();
+    if (window.BrainOSAI && typeof window.BrainOSAI.generateSummary === "function") {
+      return window.BrainOSAI.generateSummary({ type, title, content, url, originalImageName });
+    }
+
+    const source = String(content || url || title || "").trim();
     const summary = source.slice(0, 120);
     return source.length > 120 ? `${summary}…` : summary;
   }
@@ -192,6 +273,20 @@
     } catch (error) {
       return "";
     }
+  }
+
+  function normalizeImageSize(imageSize) {
+    if (!imageSize || typeof imageSize !== "object") {
+      return null;
+    }
+
+    return {
+      originalBytes: Number(imageSize.originalBytes) || 0,
+      compressedBytes: Number(imageSize.compressedBytes) || 0,
+      width: Number(imageSize.width) || 0,
+      height: Number(imageSize.height) || 0,
+      quality: Number(imageSize.quality) || 0
+    };
   }
 
   function replaceTag(tags, oldName, newName) {
