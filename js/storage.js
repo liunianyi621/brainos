@@ -45,7 +45,7 @@
 
   function createNote(input) {
     const now = new Date().toISOString();
-    const fields = buildNoteFields(input, { useInputTitle: false });
+    const fields = buildNoteFields(input, { useInputTitle: true });
     const note = normalizeNote({
       id: createId(),
       ...fields,
@@ -241,7 +241,7 @@
     const contentTitle = String(content || "").replace(/\s+/g, " ").trim().slice(0, 20);
 
     if (type === "image") {
-      return contentTitle || originalImageName || "图片";
+      return originalImageName || contentTitle || "图片";
     }
 
     if (type === "link") {

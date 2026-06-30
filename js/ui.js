@@ -25,6 +25,7 @@
     setCurrentInput(null);
 
     refs.noteForm = document.querySelector("#noteForm");
+    refs.titleInput = document.querySelector("#titleInput");
     refs.dropZone = document.querySelector("#dropZone");
     refs.dropInput = document.querySelector("#dropInput");
     refs.dropStatus = document.querySelector("#dropStatus");
@@ -333,8 +334,9 @@
     setCategoryMessage("");
   }
 
-  function handleCreateNote(event) {
+  async function handleCreateNote(event) {
     event.preventDefault();
+    const title = refs.titleInput.value.trim();
     const content = refs.dropInput.value.trim();
     const category = window.BrainOSCategories.getWritableCategory(state.activeCategory);
     const currentInput = state.currentInput;
@@ -353,7 +355,9 @@
     showSaveStatus("正在保存");
 
     try {
+      const resolvedTitle = title || await resolveAutoTitle(content, hasImageInput);
       const savedNote = window.BrainOSStorage.createNote({
+        title: resolvedTitle,
         content,
         category,
         type: hasImageInput ? "image" : undefined,
@@ -516,6 +520,58 @@
     window.clearTimeout(state.saveStatusTimer);
     refs.saveStatus.textContent = "";
     refs.saveStatus.className = "save-status";
+  }
+
+  async function resolveAutoTitle(content, hasImageInput) {
+    if (hasImageInput || !isLikelyUrl(content)) {
+      return "";
+    }
+
+    return fetchPageTitle(normalizeInputUrl(content));
+  }
+
+  function isLikelyUrl(value) {
+    const text = String(value || "").trim();
+    if (!text || /\s/.test(text)) {
+      return false;
+    }
+
+    try {
+      const url = new URL(normalizeInputUrl(text));
+      return Boolean(url.hostname && url.hostname.includes("."));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function normalizeInputUrl(value) {
+    const text = String(value || "").trim();
+    return /^https?:\/\//i.test(text) ? text : `https://${text}`;
+  }
+
+  async function fetchPageTitle(url) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 2200);
+
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        credentials: "omit"
+      });
+      const html = await response.text();
+      const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      return match ? decodeHtmlEntity(match[1]).trim().slice(0, 80) : "";
+    } catch (error) {
+      return "";
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  function decodeHtmlEntity(value) {
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = value;
+    return textarea.value;
   }
 
   function getSaveErrorMessage(error) {
