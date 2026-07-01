@@ -219,6 +219,10 @@
       return false;
     }
 
+    if (!/^https?:\/\//i.test(text) && !/^www\./i.test(text) && !/^([a-z0-9-]+\.)+[a-z]{2,}([/?#:].*)?$/i.test(text)) {
+      return false;
+    }
+
     try {
       const candidate = /^https?:\/\//i.test(text) ? text : `https://${text}`;
       const url = new URL(candidate);

@@ -177,17 +177,19 @@ button {
 
 .memory-title-input {
   width: 100%;
-  min-height: 48px;
+  min-height: 42px;
   border: 1px solid rgba(17, 24, 39, 0.055);
   border-radius: var(--radius-sm);
   outline: 0;
   padding: 0 18px;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.045);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: none;
   font-size: 1rem;
   font-weight: 680;
-  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  opacity: 0.68;
+  transform: scale(0.992);
+  transition: min-height 180ms ease, opacity 180ms ease, transform 180ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
 .memory-title-input::placeholder {
@@ -195,7 +197,12 @@ button {
   font-weight: 620;
 }
 
-.memory-title-input:focus {
+.drop-form.is-title-open .memory-title-input,
+.drop-form:focus-within .memory-title-input,
+.memory-title-input:not(:placeholder-shown) {
+  min-height: 48px;
+  opacity: 1;
+  transform: none;
   border-color: rgba(20, 27, 45, 0.14);
   background: #fff;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.07);

@@ -72,8 +72,12 @@
 
   function bindEvents() {
     refs.noteForm.addEventListener("submit", handleCreateNote);
+    refs.titleInput.addEventListener("focus", openTitleInput);
+    refs.titleInput.addEventListener("input", updateTitleInputState);
     refs.imageInput.addEventListener("change", handleImageSelect);
     refs.clearImageButton.addEventListener("click", () => clearImage(true));
+    refs.dropZone.addEventListener("click", openTitleInput);
+    refs.dropInput.addEventListener("focus", openTitleInput);
     refs.dropInput.addEventListener("paste", handlePaste);
     refs.dropZone.addEventListener("dragenter", handleDragEnter);
     refs.dropZone.addEventListener("dragover", handleDragEnter);
@@ -184,6 +188,14 @@
   function updateDropPlaceholder() {
     const category = state.activeCategory;
     refs.dropInput.placeholder = PLACEHOLDERS[category] || `粘贴${category}相关内容、图片、链接……`;
+  }
+
+  function openTitleInput() {
+    refs.noteForm.classList.add("is-title-open");
+  }
+
+  function updateTitleInputState() {
+    refs.noteForm.classList.toggle("is-title-open", Boolean(refs.titleInput.value.trim()));
   }
 
   function openCategoryManager() {
@@ -334,7 +346,7 @@
     setCategoryMessage("");
   }
 
-  async function handleCreateNote(event) {
+  function handleCreateNote(event) {
     event.preventDefault();
     const title = refs.titleInput.value.trim();
     const content = refs.dropInput.value.trim();
@@ -355,9 +367,8 @@
     showSaveStatus("正在保存");
 
     try {
-      const resolvedTitle = title || await resolveAutoTitle(content, hasImageInput);
       const savedNote = window.BrainOSStorage.createNote({
-        title: resolvedTitle,
+        title,
         content,
         category,
         type: hasImageInput ? "image" : undefined,
@@ -496,6 +507,7 @@
   function resetDropZone() {
     refs.noteForm.reset();
     clearImage(false);
+    updateTitleInputState();
   }
 
   function showSaveStatus(message, type) {
@@ -520,58 +532,6 @@
     window.clearTimeout(state.saveStatusTimer);
     refs.saveStatus.textContent = "";
     refs.saveStatus.className = "save-status";
-  }
-
-  async function resolveAutoTitle(content, hasImageInput) {
-    if (hasImageInput || !isLikelyUrl(content)) {
-      return "";
-    }
-
-    return fetchPageTitle(normalizeInputUrl(content));
-  }
-
-  function isLikelyUrl(value) {
-    const text = String(value || "").trim();
-    if (!text || /\s/.test(text)) {
-      return false;
-    }
-
-    try {
-      const url = new URL(normalizeInputUrl(text));
-      return Boolean(url.hostname && url.hostname.includes("."));
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function normalizeInputUrl(value) {
-    const text = String(value || "").trim();
-    return /^https?:\/\//i.test(text) ? text : `https://${text}`;
-  }
-
-  async function fetchPageTitle(url) {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 2200);
-
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal,
-        credentials: "omit"
-      });
-      const html = await response.text();
-      const match = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      return match ? decodeHtmlEntity(match[1]).trim().slice(0, 80) : "";
-    } catch (error) {
-      return "";
-    } finally {
-      window.clearTimeout(timeoutId);
-    }
-  }
-
-  function decodeHtmlEntity(value) {
-    const textarea = document.createElement("textarea");
-    textarea.innerHTML = value;
-    return textarea.value;
   }
 
   function getSaveErrorMessage(error) {
